@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meteo camper</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --crema:#F7F2E7;
+  --crema-scura:#EDE5D3;
+  --carta:#FCFAF4;
+  --vaniglia:#6F8FB0;        /* blu vaniglia */
+  --vaniglia-tenue:#E3EAF1;
+  --notte:#2C4660;           /* blu profondo per i testi */
+  --inchiostro:#3A3F47;
+  --grigio:#8A8578;
+  --linea:#E2D9C5;
+  /* scala pioggia: dal sabbia (asciutto) al blu notte (diluvio) */
+  --p0:#EBD9A8; --p0b:#B8975A;
+  --p1:#C9D8E6; --p1b:#7E9DBB;
+  --p2:#6F8FB0; --p2b:#4C6E91;
+  --p3:#2C4660; --p3b:#1B2F43;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--crema);color:var(--inchiostro);
+  font-family:Calibri,Carlito,"Segoe UI","Helvetica Neue",Arial,sans-serif;font-size:15px}
+.card{background:var(--carta);border:1px solid var(--linea);border-radius:14px;padding:18px 20px 16px;margin:16px;
+  box-shadow:0 1px 2px rgba(60,50,30,.05)}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:1.35rem;font-weight:400;margin:0;color:var(--notte);letter-spacing:.01em}
+h1 small{font-size:.8rem;color:var(--grigio);letter-spacing:.12em;text-transform:uppercase;margin-left:8px}
+.agg{font-size:.8rem;color:var(--grigio)}
+.giorni{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.giorni button{font:inherit;border:1px solid var(--linea);background:var(--crema);color:var(--inchiostro);
+  border-radius:999px;padding:5px 14px;cursor:pointer;transition:background .15s}
+.giorni button:hover{background:var(--vaniglia-tenue)}
+.giorni button.on{background:var(--vaniglia);border-color:var(--vaniglia);color:#fff}
+.giorni button.we{font-weight:700}
+.corpo{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+#mappa{height:500px;border-radius:10px;border:1px solid var(--linea);background:var(--crema-scura)}
+.leaflet-tile-pane{filter:sepia(.35) saturate(.9) brightness(1.03)}
+.ic{width:15px;height:15px;vertical-align:-3px;fill:none;stroke:var(--vaniglia);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;margin-right:3px}
+.leaflet-container{font-family:inherit}
+.leaflet-tooltip.etichetta{background:var(--carta);border:1px solid var(--linea);color:var(--notte);
+  box-shadow:none;font-size:.78rem;padding:1px 6px;border-radius:6px}
+.leaflet-popup-content-wrapper{background:var(--carta);border-radius:10px;color:var(--inchiostro);box-shadow:0 4px 16px rgba(40,40,30,.15)}
+.leaflet-popup-tip{background:var(--carta)}
+.pop h3{margin:0 0 2px;font-weight:400;font-size:1.05rem;color:var(--notte)}
+.pop .d{font-size:.78rem;color:var(--grigio);margin-bottom:8px}
+.pop table{border-collapse:collapse;font-size:.82rem}
+.pop td{padding:3px 6px;border-top:1px solid var(--linea);white-space:nowrap}
+.pop td.n{text-align:right;font-variant-numeric:tabular-nums}
+.pop tr.sel td{background:var(--vaniglia-tenue)}
+aside h2{font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--vaniglia);margin:2px 0 8px}
+.lista{list-style:none;margin:0;padding:0}
+.lista li{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;padding:7px 8px;margin:0 -8px;
+  border-bottom:1px solid var(--linea);cursor:pointer;border-radius:6px}
+.lista li:hover{background:var(--vaniglia-tenue)}
+.lista li:last-child{border-bottom:0}
+.pallino{width:12px;height:12px;border-radius:50%;border:1.5px solid}
+.lista b{font-weight:400;color:var(--notte);display:block}
+.lista .s{font-size:.78rem;color:var(--grigio)}
+.lista .v{text-align:right;font-variant-numeric:tabular-nums;font-size:.85rem}
+.lista .v span{display:block;font-size:.75rem;color:var(--grigio)}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.8rem;color:var(--grigio)}
+.legenda span{display:inline-flex;align-items:center;gap:6px}
+.nota{margin-top:10px;font-size:.75rem;color:var(--grigio);line-height:1.4}
+.errore{color:var(--notte);background:var(--vaniglia-tenue);padding:10px 12px;border-radius:8px}
+
+/* ——— Dentro la Plancia (?plancia): stile Timepage, senza cornice propria ——— */
+html.plancia{
+  --crema:#E4E4E4; --crema-scura:#DCDCDC; --carta:transparent; --vaniglia:#2F5DA8; --vaniglia-tenue:#DCE4F1;
+  --notte:#111111; --inchiostro:#111111; --grigio:#555555; --linea:rgba(0,0,0,.10);
+  --p0:#E6D3A3; --p0b:#B38B3F; --p1:#C3D2EA; --p1b:#7D9AC9; --p2:#5F86C4; --p2b:#2F5DA8; --p3:#1F3F75; --p3b:#13294F;
+}
+html.plancia,html.plancia body{background:transparent;font-family:"Avenir Next","Avenir","Jost","Helvetica Neue",Arial,sans-serif;font-size:14px}
+html.plancia .card{margin:0;padding:0;border:0;box-shadow:none;background:transparent}
+html.plancia h1{display:none}
+html.plancia header{position:absolute;right:0;top:0;margin:0}
+html.plancia .card{position:relative}
+html.plancia .giorni{padding-right:150px}
+html.plancia .giorni button{background:#E4E4E4;border-color:transparent;font-size:.8rem;letter-spacing:.04em}
+html.plancia .giorni button.on{background:var(--vaniglia);color:#fff}
+html.plancia #mappa{border-radius:6px;border-color:var(--linea);height:520px}
+html.plancia .corpo{grid-template-columns:minmax(0,1fr) 250px}
+html.plancia .leaflet-tile-pane{filter:grayscale(.6) brightness(1.02)}
+html.plancia aside h2{font-size:.68rem;font-weight:600;letter-spacing:.16em;color:var(--inchiostro)}
+html.plancia .lista li{position:relative;padding-left:12px}
+html.plancia .lista li:hover{background:#E4E4E4}
+html.plancia .leaflet-popup-content-wrapper,html.plancia .leaflet-popup-tip{background:#EEEEEE}
+html.plancia .leaflet-tooltip.etichetta{background:#EEEEEE}
+@media (max-width:820px){html:not(.plancia) .corpo{grid-template-columns:1fr}html:not(.plancia) #mappa{height:380px}}
+@media (max-width:560px){html.plancia .corpo{grid-template-columns:1fr}html.plancia #mappa{height:340px}}
+@media (max-width:480px){.card{margin:8px;padding:14px}}
+</style>
+</head>
+<body>
+<script>if(/[?&]plancia/.test(location.search))document.documentElement.classList.add("plancia");</script>
+<section class="card">
+  <header>
+    <h1>Dove non piove <small>200 km da Genova</small></h1>
+    <div class="agg" id="agg">Carico le previsioni…</div>
+  </header>
+  <div class="giorni" id="giorni"></div>
+  <div class="corpo">
+    <div id="mappa"></div>
+    <aside>
+      <h2 id="titoloLista">I più asciutti</h2>
+      <ul class="lista" id="lista"></ul>
+    </aside>
+  </div>
+  <div class="legenda">
+    <span><i class="pallino" style="background:var(--p0);border-color:var(--p0b)"></i>Asciutto</span>
+    <span><i class="pallino" style="background:var(--p1);border-color:var(--p1b)"></i>Qualche goccia</span>
+    <span><i class="pallino" style="background:var(--p2);border-color:var(--p2b)"></i>Pioggia</span>
+    <span><i class="pallino" style="background:var(--p3);border-color:var(--p3b)"></i>Pioggia forte</span>
+  </div>
+  <p class="nota">Previsioni Open-Meteo, aggiornate ogni ora. Il colore tiene conto di millimetri e probabilità di pioggia; in modalità Weekend somma sabato e domenica. Clicca un punto per i 5 giorni.</p>
+</section>
+
+<script>
+// ——— Mete entro ~200 km da Genova. Aggiungine o togline a piacere: [nome, lat, lon]
+const METE = [
+  ["Genova",44.407,8.934],["Arenzano",44.402,8.682],["Varazze",44.360,8.577],["Savona",44.309,8.477],
+  ["Noli",44.206,8.415],["Finale Ligure",44.169,8.343],["Albenga",44.049,8.213],["Alassio",44.007,8.173],
+  ["Imperia",43.889,8.039],["Sanremo",43.815,7.776],["Ventimiglia",43.791,7.608],["Mentone",43.775,7.497],
+  ["Nizza",43.710,7.262],["Camogli",44.349,9.155],["Rapallo",44.350,9.229],["Sestri Levante",44.272,9.394],
+  ["Levanto",44.170,9.611],["Monterosso",44.146,9.654],["La Spezia",44.102,9.824],["Lerici",44.076,9.911],
+  ["S. Stefano d'Aveto",44.546,9.451],["Sarzana",44.112,9.960],["Pontremoli",44.376,9.879],["Massa",44.035,10.140],
+  ["Castelnuovo Garfagnana",44.110,10.405],["Viareggio",43.866,10.251],["Lucca",43.843,10.505],["Pisa",43.716,10.402],
+  ["Livorno",43.548,10.311],["Bobbio",44.770,9.386],["Varzi",44.822,9.197],["Piacenza",45.052,9.693],
+  ["Salsomaggiore",44.815,9.979],["Parma",44.801,10.328],["Pavia",45.185,9.159],["Vigevano",45.317,8.857],
+  ["Milano",45.464,9.190],["Stresa",45.884,8.534],["Orta San Giulio",45.799,8.407],["Ovada",44.637,8.646],
+  ["Acqui Terme",44.676,8.468],["Novi Ligure",44.762,8.787],["Alessandria",44.913,8.615],["Casale Monferrato",45.134,8.452],
+  ["Asti",44.900,8.207],["Alba",44.701,8.035],["Barolo",44.611,7.943],["Mondovì",44.390,7.818],
+  ["Cuneo",44.384,7.543],["Saluzzo",44.645,7.493],["Limone Piemonte",44.201,7.576],["Torino",45.070,7.687],
+  ["Aosta",45.737,7.320]
+];
+const GENOVA = [44.407, 8.934];
+const RAGGIO_KM = 200;
+const GIORNI_MOSTRATI = 5;
+
+const $ = id => document.getElementById(id);
+const fmtG = new Intl.DateTimeFormat("it-IT",{weekday:"short",day:"numeric"});
+const fmtGL = new Intl.DateTimeFormat("it-IT",{weekday:"long",day:"numeric",month:"long"});
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+
+function km(a,b){
+  const R=6371,r=Math.PI/180,dl=(b[0]-a[0])*r,dn=(b[1]-a[1])*r;
+  const x=Math.sin(dl/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dn/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+const SV=(d)=>'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">'+d+'</svg>';
+const NUV='<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 10.5 3.75 3.75 0 0 0 7 18Z"/>';
+const IC={
+  sole:SV('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
+  velato:SV('<circle cx="8.5" cy="8.5" r="3"/><path d="M8.5 2.5v1.2M2.5 8.5h1.2M4.3 4.3l.9.9M12.7 4.3l-.9.9"/><path d="M9 19h8a3.5 3.5 0 0 0 .5-6.96A4.8 4.8 0 0 0 9 12.5 3.25 3.25 0 0 0 9 19Z"/>'),
+  nuvola:SV(NUV),
+  nebbia:SV('<path d="M4 9h16M3 13h18M5 17h14"/>'),
+  pioggia:SV('<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 7.5 3.75 3.75 0 0 0 7 15Z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>'),
+  neve:SV('<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 7.5 3.75 3.75 0 0 0 7 15Z"/><path d="M9 19h.01M13 20h.01M17 19h.01"/>'),
+  temporale:SV('<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 7.5 3.75 3.75 0 0 0 7 15Z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>')
+};
+function cielo(c){
+  if(c===0) return [IC.sole,"Sereno"];
+  if(c<=2) return [IC.velato,"Poco nuvoloso"];
+  if(c===3) return [IC.nuvola,"Coperto"];
+  if(c<=48) return [IC.nebbia,"Nebbia"];
+  if(c<=57) return [IC.pioggia,"Pioviggine"];
+  if(c<=67) return [IC.pioggia,"Pioggia"];
+  if(c<=77) return [IC.neve,"Neve"];
+  if(c<=82) return [IC.pioggia,"Rovesci"];
+  if(c<=86) return [IC.neve,"Rovesci di neve"];
+  return [IC.temporale,"Temporale"];
+}
+// 0 asciutto · 1 qualche goccia · 2 pioggia · 3 pioggia forte
+function classe(mm,prob){
+  if(mm<0.5 && prob<35) return 0;
+  if(mm<3) return 1;
+  if(mm<12) return 2;
+  return 3;
+}
+const COL = [["--p0","--p0b"],["--p1","--p1b"],["--p2","--p2b"],["--p3","--p3b"]]
+  .map(([f,b])=>{const s=getComputedStyle(document.documentElement);return {f:s.getPropertyValue(f).trim(),b:s.getPropertyValue(b).trim()}});
+
+// ——— Mappa
+const PLANCIA=document.documentElement.classList.contains("plancia");
+const mappa = L.map("mappa",{zoomSnap:0.25,zoomDelta:0.5,zoomControl:true,scrollWheelZoom:false,attributionControl:true});
+mappa.attributionControl.setPrefix("Leaflet");
+const ESRI="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+L.tileLayer(ESRI+"World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,
+  attribution:'Mappa &copy; Esri, HERE, Garmin, &copy; OpenStreetMap'}).addTo(mappa);
+mappa.createPane("nomi").style.zIndex=350; mappa.getPane("nomi").style.pointerEvents="none";
+L.tileLayer(ESRI+"World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,pane:"nomi",opacity:.85}).addTo(mappa);
+const cerchio = L.circle(GENOVA,{radius:RAGGIO_KM*1000,color:PLANCIA?"#2F5DA8":"#6F8FB0",weight:1.2,dashArray:"5 6",fill:true,fillColor:PLANCIA?"#2F5DA8":"#6F8FB0",fillOpacity:.04,interactive:false}).addTo(mappa);
+const inquadra=()=>{mappa.invalidateSize();mappa.fitBounds(L.latLng(GENOVA).toBounds(RAGGIO_KM*2000),{padding:[6,6]});};
+inquadra();
+let toccata=false;
+["mousedown","wheel","touchstart"].forEach(ev=>$("mappa").addEventListener(ev,()=>toccata=true,{passive:true}));
+addEventListener("resize",()=>toccata?mappa.invalidateSize():inquadra());
+mappa.on("click",()=>mappa.scrollWheelZoom.enable());
+mappa.on("mouseout",()=>mappa.scrollWheelZoom.disable());
+
+let dati=null, vista=0, marcatori=[];
+
+function valori(p, v){
+  // v = indice giorno, oppure "we" per sabato+domenica
+  const d=p.daily;
+  if(v==="we"){
+    const idx=weekend();
+    const mm=idx.reduce((s,i)=>s+(d.precipitation_sum[i]||0),0);
+    const prob=Math.max(...idx.map(i=>d.precipitation_probability_max[i]||0));
+    const tmax=Math.max(...idx.map(i=>d.temperature_2m_max[i]));
+    const tmin=Math.min(...idx.map(i=>d.temperature_2m_min[i]));
+    const code=Math.max(...idx.map(i=>d.weather_code[i]));
+    return {mm,prob,tmax,tmin,code,cl:classe(mm/idx.length,prob)};
+  }
+  const mm=d.precipitation_sum[v]||0, prob=d.precipitation_probability_max[v]||0;
+  return {mm,prob,tmax:d.temperature_2m_max[v],tmin:d.temperature_2m_min[v],code:d.weather_code[v],cl:classe(mm,prob)};
+}
+function weekend(){
+  const t=dati[0].daily.time; const out=[];
+  t.forEach((s,i)=>{const g=new Date(s+"T12:00").getDay(); if(g===6||g===0) out.push(i);});
+  // primo sabato e la domenica dopo (o la sola domenica se oggi è domenica)
+  const s=out.findIndex(i=>new Date(t[i]+"T12:00").getDay()===6);
+  if(s>=0) return out.slice(s,s+2);
+  return out.slice(0,1);
+}
+function punteggio(v){return v.mm + v.prob/15;}
+
+function popup(i){
+  const [nome,lat,lon]=METE[i], p=dati[i], d=p.daily;
+  const we = vista==="we"?weekend():[];
+  let righe="";
+  for(let g=0; g<GIORNI_MOSTRATI; g++){
+    const [ic,desc]=cielo(d.weather_code[g]);
+    const sel = (vista===g || we.includes(g)) ? ' class="sel"' : "";
+    righe+=`<tr${sel}><td>${cap(fmtG.format(new Date(d.time[g]+"T12:00")))}</td><td title="${desc}">${ic} ${desc}</td>`+
+      `<td class="n">${(d.precipitation_sum[g]||0).toFixed(1)} mm</td><td class="n">${d.precipitation_probability_max[g]??0}%</td>`+
+      `<td class="n">${Math.round(d.temperature_2m_min[g])}° / ${Math.round(d.temperature_2m_max[g])}°</td></tr>`;
+  }
+  return `<div class="pop"><h3>${nome}</h3><div class="d">${Math.round(km(GENOVA,[lat,lon]))} km da Genova in linea d'aria</div><table>${righe}</table></div>`;
+}
+
+function disegna(){
+  marcatori.forEach(m=>m.remove()); marcatori=[];
+  const righe=[];
+  METE.forEach(([nome,lat,lon],i)=>{
+    const v=valori(dati[i],vista), c=COL[v.cl];
+    const m=L.circleMarker([lat,lon],{radius:nome==="Genova"?10:8,color:c.b,weight:1.6,fillColor:c.f,fillOpacity:.95})
+      .bindTooltip(`${nome} · ${v.mm.toFixed(1)} mm · ${Math.round(v.tmax)}°`,{className:"etichetta",direction:"top",offset:[0,-6]})
+      .bindPopup(()=>popup(i),{maxWidth:420})
+      .addTo(mappa);
+    marcatori[i]=m;
+    righe.push({i,nome,v,dist:km(GENOVA,[lat,lon])});
+  });
+  righe.sort((a,b)=>punteggio(a.v)-punteggio(b.v) || a.dist-b.dist);
+  $("titoloLista").textContent = vista==="we" ? "I più asciutti nel weekend" : "I più asciutti · "+fmtG.format(new Date(dati[0].daily.time[vista]+"T12:00"));
+  $("lista").innerHTML = righe.slice(0,10).map(r=>{
+    const c=COL[r.v.cl], [ic,desc]=cielo(r.v.code);
+    return `<li data-i="${r.i}"><i class="pallino" style="background:${c.f};border-color:${c.b}"></i>`+
+      `<div><b>${r.nome}</b><span class="s">${ic} ${desc} · ${Math.round(r.dist)} km</span></div>`+
+      `<div class="v">${r.v.mm.toFixed(1)} mm<span>${Math.round(r.v.tmin)}°/${Math.round(r.v.tmax)}° · ${r.v.prob}%</span></div></li>`;
+  }).join("");
+  $("lista").querySelectorAll("li").forEach(li=>li.onclick=()=>{
+    const m=marcatori[+li.dataset.i]; mappa.setView(m.getLatLng(),Math.max(mappa.getZoom(),9)); m.openPopup();
+  });
+}
+
+function pulsanti(){
+  const t=dati[0].daily.time; let h="";
+  for(let g=0; g<GIORNI_MOSTRATI; g++){
+    const dt=new Date(t[g]+"T12:00"), wd=dt.getDay();
+    const lab = g===0?"Oggi":g===1?"Domani":cap(fmtG.format(dt));
+    h+=`<button data-v="${g}" class="${wd===0||wd===6?"we":""}" title="${cap(fmtGL.format(dt))}">${lab}</button>`;
+  }
+  h+=`<button data-v="we" class="we">Weekend</button>`;
+  $("giorni").innerHTML=h;
+  $("giorni").querySelectorAll("button").forEach(b=>{
+    b.classList.toggle("on", String(vista)===b.dataset.v);
+    b.onclick=()=>{vista=b.dataset.v==="we"?"we":+b.dataset.v; pulsanti(); disegna();};
+  });
+}
+
+// Cache di 30 minuti: ogni scheda nuova del browser riapre la Plancia, e senza cache
+// ogni apertura costerebbe a Open-Meteo una chiamata per ogni meta (limite gratuito: 600 al minuto).
+const CACHE_KEY="meteoCamper:v1:"+METE.length, CACHE_MIN=30;
+function leggiCache(){ try{ const c=JSON.parse(localStorage.getItem(CACHE_KEY)); return c&&Array.isArray(c.d)&&c.d.length===METE.length?c:null; }catch(e){ return null; } }
+function scriviCache(d){ try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),d})); }catch(e){} }
+const ora=t=>new Date(t).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+
+function mostra(d){
+  // se la cache è di ieri, il "giorno 0" non è più oggi: la scarto
+  const oggi=new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"});
+  if(d[0].daily.time[0]!==oggi) return false;
+  dati=d;
+  // di default, dal giovedì in poi parto dal weekend: è quello che ti serve
+  if(!mostra.fatto){ const g=new Date().getDay(); if(g===4||g===5||g===6) vista="we"; mostra.fatto=true; }
+  pulsanti(); disegna(); return true;
+}
+
+let riprova=null;
+async function carica(){
+  clearTimeout(riprova);
+  const c=leggiCache();
+  if(c && Date.now()-c.t < CACHE_MIN*60e3 && mostra(c.d)){ $("agg").textContent="Aggiornato alle "+ora(c.t); return; }
+  const lat=METE.map(m=>m[1]).join(","), lon=METE.map(m=>m[2]).join(",");
+  const url="https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max"+
+    "&timezone=Europe%2FRome&forecast_days=8";
+  try{
+    const r=await fetch(url);
+    if(!r.ok) throw new Error(r.status===429?"limite":String(r.status));
+    const j=await r.json(), d=Array.isArray(j)?j:[j];
+    if(d.length!==METE.length || !d[0].daily) throw new Error("formato");
+    scriviCache(d); mostra(d);
+    $("agg").textContent="Aggiornato alle "+ora(Date.now());
+  }catch(e){
+    // meglio previsioni di qualche ora fa che niente
+    if(!dati && c && mostra(c.d)){ $("agg").textContent="Previsioni delle "+ora(c.t)+" · nuovo tentativo tra 10 min"; }
+    else if(!dati){ $("lista").innerHTML='<li class="errore" style="display:block">'+(e.message==="limite"?"Open-Meteo dice: troppe richieste. Riprovo tra 10 minuti.":"Previsioni non raggiungibili, riprovo tra 10 minuti.")+'</li>'; $("agg").textContent=""; }
+    else $("agg").textContent="Aggiornamento non riuscito · riprovo tra 10 min";
+    riprova=setTimeout(carica,10*60e3);
+  }
+}
+carica();
+setInterval(carica,60*60e3);
+
+// Dentro la Plancia: comunica l'altezza, così il riquadro si adatta senza barre di scorrimento
+if(PLANCIA && parent!==window){
+  const manda=()=>parent.postMessage({meteoCamper:document.documentElement.scrollHeight},"*");
+  new ResizeObserver(manda).observe(document.body); addEventListener("load",manda); manda();
+}
+</script>
+</body>
+</html>

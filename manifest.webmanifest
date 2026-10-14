@@ -1,0 +1,13 @@
+{
+  "name": "Plancia",
+  "short_name": "Plancia",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#DCDCDC",
+  "theme_color": "#2F3A48",
+  "icons": [
+    { "src": "icona-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icona-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

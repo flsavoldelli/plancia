@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Plancia</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plancia">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2F3A48">
+<link rel="apple-touch-icon" href="icona-180.png">
+<link rel="icon" type="image/png" href="icona-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&family=Google+Sans&display=swap">
+<style>
+/* ===================== IMPOSTAZIONI =====================
+   Modifica qui: città predefinita, calendario, simboli. */
+</style>
+<script>
+const CONFIG = {
+  nome: "Fede",
+  // Città predefinita per il meteo (puoi cambiarla anche dalla pagina)
+  meteo: { citta: "Genova", lat: 44.4056, lon: 8.9463 },
+  // Calendario Google da mostrare (il tuo indirizzo Gmail = calendario principale).
+  // Puoi aggiungere altri calendari nell'elenco.
+  calendari: ["flsavoldelli@gmail.com"],
+  // Sampdoria (ID squadra ESPN) e competizioni da seguire
+  samp: { id: 2734, competizioni: ["ita.2", "ita.coppa_italia"] },
+  // Posta, Letture e Agenda: URL della web app Apps Script (file plancia-script.gs), SENZA chiave.
+  // La chiave non sta nel codice (che su GitHub è pubblico): la Plancia la chiede una volta
+  // e la tiene salvata su ogni dispositivo. Nella copia locale del Mac viene inserita qui sotto.
+  scriptBase: "https://script.google.com/macros/s/AKfycbzduBciBD-RMAo5blcfYNn1ZxG6fIj3WLUoVgZ9NPpTlZt5ujF2YC1olLD8D-A07yxsWA/exec",
+  chiave: "",
+  // Simboli TradingView
+  mercati: [
+    { title: "Indici", symbols: [
+      { s: "INDEX:FTSEMIB", d: "FTSE MIB" },
+      { s: "XETR:DAX", d: "DAX" },
+      { s: "FOREXCOM:SPXUSD", d: "S&P 500" },
+      { s: "FOREXCOM:NSXUSD", d: "Nasdaq 100" },
+      { s: "INDEX:SX5E", d: "Euro Stoxx 50" }
+    ]},
+    { title: "Tassi", symbols: [
+      { s: "TVC:IT10Y", d: "BTP 10A" },
+      { s: "TVC:DE10Y", d: "Bund 10A" },
+      { s: "TVC:US10Y", d: "Treasury 10A" },
+      { s: "TVC:IT02Y", d: "BTP 2A" }
+    ]},
+    { title: "Valute e materie", symbols: [
+      { s: "FX:EURUSD", d: "EUR/USD" },
+      { s: "FX:EURCHF", d: "EUR/CHF" },
+      { s: "OANDA:XAUUSD", d: "Oro" },
+      { s: "TVC:UKOIL", d: "Brent" },
+      { s: "BITSTAMP:BTCUSD", d: "Bitcoin" }
+    ]}
+  ],
+  nastro: [
+    { proName: "INDEX:FTSEMIB", title: "FTSE MIB" },
+    { proName: "XETR:DAX", title: "DAX" },
+    { proName: "FOREXCOM:SPXUSD", title: "S&P 500" },
+    { proName: "FOREXCOM:NSXUSD", title: "Nasdaq 100" },
+    { proName: "TVC:IT10Y", title: "BTP 10A" },
+    { proName: "TVC:DE10Y", title: "Bund 10A" },
+    { proName: "FX:EURUSD", title: "EUR/USD" },
+    { proName: "OANDA:XAUUSD", title: "Oro" },
+    { proName: "TVC:UKOIL", title: "Brent" },
+    { proName: "BITSTAMP:BTCUSD", title: "Bitcoin" }
+  ]
+};
+// Chiave: dall'indirizzo (?k=…, una volta sola), dal dispositivo, o dalla copia locale
+(function(){
+  let k = "";
+  try{
+    const u = new URL(location.href), q = u.searchParams.get("k");
+    if(q){ localStorage.setItem("plancia.chiave", q); u.searchParams.delete("k"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
+    k = localStorage.getItem("plancia.chiave") || "";
+  }catch(e){}
+  k = k || CONFIG.chiave;
+  CONFIG.script = k ? CONFIG.scriptBase + "?k=" + encodeURIComponent(k) : "";
+})();
+</script>
+<style>
+/* Layout in stile Timepage: colonna nera con calendario · centro grigio con ricerca e schede · pannello "Oggi" chiaro */
+:root{
+  --nero:#2F3A48;        /* colonna calendario: grafite blu, meno pesante del nero */
+  --nero-2:#3A4757;
+  --grigio:#A4A4A4;      /* fondo centrale */
+  --perla:#DCDCDC;       /* pannello Oggi */
+  --scheda:#EEEEEE;      /* schede */
+  --inchiostro:#111111;  /* testo */
+  --fumo:#555555;        /* testo secondario */
+  --filo:rgba(0,0,0,.10);/* separatori */
+  --blu:#2F5DA8;         /* barrette eventi, accento */
+  --oro:#B38B3F;         /* giorni segnati */
+  --font:"Avenir Next","Avenir","Jost","Helvetica Neue",Arial,sans-serif;
+  --ombra:0 1px 2px rgba(0,0,0,.10),0 6px 18px -10px rgba(0,0,0,.35);
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--grigio);color:var(--inchiostro);font-family:var(--font);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit}
+.app{display:grid;grid-template-columns:300px minmax(0,1fr) 390px;min-height:100vh}
+
+/* ---------- Colonna nera ---------- */
+.lato{background:var(--nero);color:#fff;position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 22px 22px;display:flex;flex-direction:column;gap:22px}
+.anno{display:flex;align-items:center;gap:10px}
+.anno b{font-size:2.6rem;font-weight:300;letter-spacing:.02em;line-height:1;font-variant-numeric:tabular-nums}
+.anno button{background:none;border:0;color:#fff;cursor:pointer;padding:2px 4px;font-size:.9rem;opacity:.75}
+.anno button:hover{opacity:1}
+.mesi{display:grid;grid-template-columns:repeat(6,1fr);gap:6px 4px}
+.mesi button{background:none;border:0;color:#D5DCE4;font-size:.72rem;font-weight:500;letter-spacing:.08em;padding:5px 0;border-radius:3px;cursor:pointer}
+.mesi button:hover{color:#fff}
+.mesi button[aria-current="true"]{background:#fff;color:var(--nero);font-weight:700}
+.mese{font-size:1.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:4px 0 0}
+.cal{display:grid;grid-template-columns:22px repeat(7,1fr);row-gap:5px;align-items:center;justify-items:center;font-variant-numeric:tabular-nums}
+.cal .h{font-size:.7rem;color:#AEB8C4;font-weight:500;padding-bottom:4px}
+.cal .sett{font-size:.72rem;color:var(--oro);font-weight:600;justify-self:start}
+.cal a{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;text-decoration:none;font-size:.86rem;border:1.5px solid transparent}
+.cal a:hover{border-color:#fff}
+.cal a.fuori{color:#5E6B7A}
+.cal a.passato{color:#9AA6B3}
+.cal a.fine{color:#cfcfcf}
+.cal a.samp{background:var(--oro);color:#fff;font-weight:600}
+.cal a.oggi-g{background:#fff;color:var(--nero);font-weight:700}
+.cal a.oggi-g.samp{box-shadow:0 0 0 2px var(--oro)}
+.legenda{display:flex;gap:14px;font-size:.72rem;color:#AEB8C4;letter-spacing:.06em;text-transform:uppercase}
+.legenda i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
+.orologio{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+.orologio .ora{font-size:3rem;font-weight:300;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.orologio .saluto{font-size:.95rem;color:#C9D1DA;margin:0;font-weight:400}
+.orologio .saluto b{color:#fff;font-weight:600}
+.icone{display:flex;gap:18px;padding-top:6px}
+.icone a{color:#fff;opacity:.85;display:grid;place-items:center}
+.icone a:hover{opacity:1}
+.icone svg{width:22px;height:22px}
+
+/* ---------- Centro grigio ---------- */
+.centro{padding:26px 28px 34px;display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* Ricerca in stile homepage Google, nei toni della plancia */
+.ricerca{--g:"Google Sans",Roboto,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;gap:16px;padding-block:6px 2px;font-family:var(--g)}
+.ricerca .barra{width:100%;max-width:640px;height:50px;display:flex;align-items:center;gap:12px;padding:0 10px 0 16px;background:var(--scheda);border:1px solid transparent;border-radius:25px;box-shadow:0 1px 2px rgba(0,0,0,.12);transition:box-shadow .15s}
+.ricerca .barra:hover,.ricerca .barra:focus-within{box-shadow:0 2px 10px rgba(0,0,0,.28)}
+.ricerca .barra svg{flex:none;width:20px;height:20px;color:var(--fumo)}
+.ricerca input{flex:1;min-width:0;height:100%;border:0;background:transparent;font-family:var(--g);font-size:16px;color:var(--inchiostro);outline:none;padding:0}
+.ricerca input::-webkit-search-cancel-button{display:none}
+.ricerca .pulisci{flex:none;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:var(--fumo);cursor:pointer;padding:0}
+.ricerca .pulisci:hover{background:rgba(0,0,0,.06)}
+.ricerca .tasti{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.ricerca .tasti button{font-family:var(--g);font-size:14px;color:var(--inchiostro);background:var(--scheda);border:1px solid transparent;border-radius:8px;height:36px;padding:0 16px;cursor:pointer;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.ricerca .tasti button:hover{border-color:rgba(0,0,0,.25)}
+
+.nastro{background:var(--scheda);border-radius:6px;box-shadow:var(--ombra);min-height:46px;overflow:hidden}
+
+.griglia{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px}
+.camper iframe{width:100%;height:640px;border:0;display:block}
+.s6{grid-column:span 6}.s4{grid-column:span 4}.s3{grid-column:span 3}.s2{grid-column:span 2}
+
+/* Schede (stesse del pannello Oggi) */
+.scheda{background:var(--scheda);border-radius:6px;box-shadow:var(--ombra);padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.etichetta{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:0}
+.etichetta h2,.sezione{margin:0;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--inchiostro)}
+.etichetta a,.etichetta button{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--fumo);text-decoration:none;background:none;border:0;cursor:pointer;padding:0}
+.etichetta a:hover,.etichetta button:hover{color:var(--blu)}
+
+/* Righe con barretta blu, come gli eventi di Timepage */
+.riga{position:relative;display:block;padding:7px 10px 7px 16px;border-radius:4px;color:var(--inchiostro);text-decoration:none}
+.riga::before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--blu)}
+a.riga:hover{background:rgba(0,0,0,.05)}
+.riga .tit{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.riga .sub{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--fumo);display:block;font-variant-numeric:tabular-nums}
+
+/* Mercati e notizie */
+.tv{flex:1;min-height:420px}
+.tv .tradingview-widget-container,.tv .tradingview-widget-container__widget{height:100%}
+
+/* Posta */
+.conta{display:inline-block;margin-left:8px;background:var(--blu);color:#fff;border-radius:999px;padding:1px 8px;font-size:.68rem;letter-spacing:0;font-variant-numeric:tabular-nums;vertical-align:1px}
+.posta{display:flex;flex-direction:column;gap:2px}
+.posta .riga{display:grid;grid-template-columns:1fr auto;column-gap:10px}
+.posta .da{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.posta .quando{color:var(--fumo);font-size:.78rem;font-variant-numeric:tabular-nums}
+.posta .ogg{grid-column:1/-1;color:var(--fumo);font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.posta ol{margin:4px 0 0;padding-left:1.2em;color:var(--fumo);font-size:.9rem;display:flex;flex-direction:column;gap:4px}
+.posta code,.errore code{font-size:.85em;background:rgba(0,0,0,.06);padding:0 4px;border-radius:3px}
+.posta .vuoto{color:var(--fumo);margin:0}
+
+/* Letture */
+.letture{display:flex;flex-direction:column;gap:2px}
+.letture a{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;padding:6px;margin-inline:-6px;border-radius:4px;color:var(--inchiostro);text-decoration:none}
+.letture a:hover{background:rgba(0,0,0,.05)}
+.letture img,.letture .ph{width:64px;height:48px;border-radius:3px;object-fit:cover;background:#d4d4d4;display:block;filter:saturate(.85)}
+.letture .t{min-width:0;display:flex;flex-direction:column;gap:1px}
+.letture .f{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--blu)}
+.letture b{font-weight:500;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Collegamenti */
+.link{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));column-gap:22px;row-gap:4px;align-content:start}
+.link .etichetta{grid-column:1/-1}
+.gruppo{display:flex;flex-direction:column}
+.gruppo h3{margin:6px 0 4px;font-size:.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--fumo)}
+.gruppo a{color:var(--inchiostro);text-decoration:none;padding:4px 8px;margin-inline:-8px;border-radius:4px;display:flex;justify-content:space-between}
+.gruppo a::after{content:"↗";color:var(--fumo);font-size:.85em}
+.gruppo a:hover{background:rgba(0,0,0,.05)}
+
+/* ---------- Pannello Oggi ---------- */
+.oggi{background:var(--perla);position:sticky;top:0;height:100vh;overflow-y:auto;padding:30px 26px 30px;display:flex;flex-direction:column;gap:14px;box-shadow:-1px 0 0 rgba(0,0,0,.08)}
+.oggi-testa{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.oggi-testa h1{margin:0;font-size:1.8rem;font-weight:700;letter-spacing:.06em;line-height:1}
+.oggi-testa .giorno{display:block;margin-top:6px;font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:var(--fumo)}
+.pillola{display:inline-flex;align-items:center;gap:6px;background:var(--nero);color:#fff;border-radius:999px;padding:4px 10px 4px 6px;font-size:.8rem;font-variant-numeric:tabular-nums}
+.pillola svg{width:16px;height:16px}
+.sezione{margin-top:10px;padding-left:2px}
+
+/* Programma: Google Calendar */
+.programma iframe{width:100%;flex:1;min-height:520px;border:0;display:block;background:var(--scheda)}
+.agenda{display:flex;flex-direction:column;gap:2px;max-height:600px;overflow-y:auto}
+.agenda .giornata{font-size:.66rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--fumo);margin:10px 0 2px 2px}
+.agenda .giornata:first-child{margin-top:0}
+.agenda .giornata.oggi-a{color:var(--blu)}
+.agenda .riga{display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:baseline}
+.agenda .ore{font-size:.8rem;color:var(--fumo);font-variant-numeric:tabular-nums;min-width:42px}
+.agenda .tit{white-space:normal}
+.agenda .dove-ev{grid-column:2;font-size:.78rem;color:var(--fumo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Chiave dello script */
+.chiave-box{position:fixed;inset:0;z-index:50;background:rgba(47,58,72,.55);display:grid;place-items:center;padding:16px}
+.chiave-box form{background:var(--scheda);border-radius:8px;box-shadow:var(--ombra);padding:22px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px}
+.chiave-box h2{margin:0;font-size:1rem;letter-spacing:.04em}
+.chiave-box p{margin:0;color:var(--fumo);font-size:.9rem}
+.chiave-box input{font-size:16px;padding:10px 12px;border:1px solid var(--filo);border-radius:6px;background:#fff}
+.chiave-box .az{display:flex;gap:10px;justify-content:flex-end}
+.chiave-box button{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;border:0;border-radius:6px;padding:9px 14px;cursor:pointer;background:transparent;color:var(--fumo)}
+.chiave-box button[type=submit]{background:var(--blu);color:#fff}
+.tv.mini{min-height:520px}
+
+/* Meteo */
+.meteo-ora{display:grid;grid-template-columns:64px 1fr;gap:16px;align-items:center}
+.meteo-ora .icona{width:58px;height:58px;color:var(--inchiostro)}
+.meteo-ora .icona svg{width:100%;height:100%}
+.meteo-ora .temp{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
+.meteo-ora .cond{font-size:1.05rem;font-weight:500}
+.meteo-ora .dove{font-size:.8rem;color:var(--fumo);display:flex;align-items:center;gap:4px}
+.meteo-ora .dove svg{width:11px;height:11px}
+.dettagli{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-variant-numeric:tabular-nums}
+.dettagli div{display:flex;align-items:center;gap:8px;font-size:.95rem}
+.dettagli svg{width:16px;height:16px;flex:none;color:var(--inchiostro)}
+.giorni{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;border-top:1px solid var(--filo);padding-top:10px}
+.giorni div{display:flex;flex-direction:column;align-items:center;gap:2px;font-variant-numeric:tabular-nums;font-size:.85rem}
+.giorni .n{font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fumo)}
+.giorni svg{width:20px;height:20px}
+.giorni .mn{color:var(--fumo)}
+.luogo{display:flex;gap:6px}
+.luogo input{flex:1;min-width:0;font-size:.85rem;color:var(--inchiostro);background:#fff;border:1px solid var(--filo);border-radius:4px;padding:6px 9px}
+.luogo button{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--inchiostro);background:transparent;border:1px solid rgba(0,0,0,.25);border-radius:4px;padding:5px 9px;cursor:pointer;display:grid;place-items:center}
+.luogo button:hover{background:#fff}
+.luogo button svg{width:14px;height:14px}
+
+/* Sampdoria */
+.samp{position:relative;overflow:hidden;padding-top:22px}
+.righe{position:absolute;top:0;left:0;right:0;height:5px;display:flex}
+.righe i{flex:1}
+.righe i:nth-child(1),.righe i:nth-child(6){background:#1F4E9E;flex:3}
+.righe i:nth-child(2),.righe i:nth-child(5){background:#FFFFFF}
+.righe i:nth-child(3){background:#C8102E}
+.righe i:nth-child(4){background:#121212}
+.partite{display:flex;flex-direction:column;gap:2px}
+.partita.riga::before{background:#1F4E9E}
+.partita .contro{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.partita .pill{font-size:.6rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:2px 6px;border-radius:3px;border:1px solid #111;color:#111}
+.partita .pill.casa{background:#111;color:#fff}
+.partita .comp{font-size:.8rem;color:var(--fumo)}
+
+/* In questa giornata */
+.storia{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.storia b{font-size:1.6rem;font-weight:500;font-variant-numeric:tabular-nums}
+.storia p{margin:0;font-size:.9rem;line-height:1.35}
+.storia a{color:inherit;text-decoration:none}
+.storia a:hover{text-decoration:underline}
+
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--blu);outline-offset:2px}
+.ricerca input:focus-visible{outline:none}
+.piede{color:#3d3d3d;font-size:.72rem;letter-spacing:.06em;text-align:center}
+.errore{color:var(--fumo);font-style:italic;margin:0}
+
+/* ---------- Schermi più stretti ---------- */
+@media (max-width:1280px){
+  .app{grid-template-columns:270px minmax(0,1fr)}
+  .oggi{position:static;height:auto;grid-column:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start;padding:24px 28px}
+  .oggi-testa,.oggi .sezione{grid-column:1/-1}
+}
+@media (max-width:900px){.s4,.s3,.s2{grid-column:span 6}}
+/* ---------- Telefono: una colonna, prima Oggi e la Samp ---------- */
+@media (max-width:760px){
+  body{font-size:16px}
+  .app{display:flex;flex-direction:column;min-height:100dvh}
+  .lato{display:none}
+  /* il pannello Oggi si scioglie: in alto Samp e meteo, in fondo "In questa giornata" */
+  .app{background:var(--perla);padding-top:env(safe-area-inset-top)}
+  .oggi{display:contents}
+  .oggi > *{margin-inline:16px}
+  .oggi-testa{order:1;margin:18px 16px 12px}
+  .oggi-testa h1{font-size:1.5rem}
+  .oggi .sezione{margin-top:0}
+  .oggi > .samp-tit{order:2;margin-bottom:8px}
+  .oggi > .samp{order:3;margin-bottom:18px}
+  .oggi > .sezione-riga{order:4;margin-bottom:8px}
+  .oggi > #meteo{order:5;margin-bottom:20px}
+  .centro{order:6;background:var(--grigio);padding:16px 16px 24px;gap:16px}
+  .oggi > h2.sezione{order:7;margin-top:20px;margin-bottom:8px}
+  .oggi > .storia{order:8;margin-bottom:calc(env(safe-area-inset-bottom) + 24px)}
+  .griglia{gap:14px}
+  .s6,.s4,.s3,.s2{grid-column:1/-1}
+  .scheda{padding:16px}
+  .programma{order:-3}.posta-s{order:-2}.mercati-s{order:-1}
+  .tv.mini{min-height:380px}
+  .agenda{max-height:none}
+  .camper iframe{height:560px}
+  .ricerca .tasti{flex-wrap:nowrap;width:100%}
+  .ricerca .tasti button{flex:1;padding:0 10px;font-size:13px;white-space:nowrap}
+  .notizie-s{display:none}
+  .riga .tit{white-space:normal}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Colonna nera: anno, mesi, calendario, ora -->
+  <aside class="lato" aria-label="Calendario">
+    <div class="anno"><b id="anno">2026</b><button type="button" id="annoSu" aria-label="Anno successivo">▲</button><button type="button" id="annoGiu" aria-label="Anno precedente">▼</button></div>
+    <div class="mesi" id="mesi"></div>
+    <h2 class="mese" id="nomeMese">Ottobre</h2>
+    <div class="cal" id="cal"></div>
+    <div class="legenda"><span><i style="background:#fff"></i>Oggi</span><span><i style="background:var(--oro)"></i>Samp</span></div>
+    <div class="orologio">
+      <div class="ora" id="ora">--:--</div>
+      <p class="saluto" id="saluto">Buongiorno, <b>Fede</b></p>
+    </div>
+    <nav class="icone" aria-label="Scorciatoie">
+      <a href="https://mail.google.com/" target="_blank" rel="noopener" title="Gmail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6 8.5 7 8.5-7"/></svg></a>
+      <a href="https://calendar.google.com/" target="_blank" rel="noopener" title="Google Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></a>
+      <a href="https://drive.google.com/" target="_blank" rel="noopener" title="Drive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8.5 4h7l5.5 9.5-3.5 6h-11L3 13.5Z"/><path d="M8.5 4 12 10l-5.5 9.5M15.5 4 12 10h9M3 13.5h9"/></svg></a>
+      <a href="#q" id="vaiCerca" title="Cerca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
+    </nav>
+  </aside>
+
+  <!-- Centro: ricerca, mercati, posta, letture -->
+  <main class="centro">
+    <form class="ricerca" id="ricerca" action="https://www.google.com/search" method="get" role="search">
+      <div class="barra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" name="q" type="search" autocomplete="off" autofocus aria-label="Cerca con Google">
+        <button type="button" class="pulisci" id="pulisci" aria-label="Cancella" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="tasti">
+        <button type="submit">Cerca con Google</button>
+        <button type="submit" name="udm" value="50">Chiedi in AI Mode</button>
+      </div>
+    </form>
+
+    <div class="nastro" id="nastro"></div>
+
+    <section class="griglia">
+      <article class="scheda s4 programma">
+        <div class="etichetta"><h2>Agenda</h2><a href="https://calendar.google.com/" target="_blank" rel="noopener">Apri Calendar</a></div>
+        <div class="agenda" id="agenda"><p class="errore">Caricamento…</p></div>
+        <iframe id="calendario" title="Google Calendar" loading="lazy" hidden></iframe>
+      </article>
+
+      <article class="scheda s2 mercati-s">
+        <div class="etichetta"><h2>Mercati</h2><a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a></div>
+        <div class="tv mini" id="mercati"></div>
+      </article>
+
+      <article class="scheda s2 posta-s">
+        <div class="etichetta"><h2>Posta <span class="conta" id="contaPosta" hidden></span></h2><a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener">Gmail</a></div>
+        <div class="posta" id="posta"><p class="errore">Caricamento…</p></div>
+      </article>
+
+      <article class="scheda s2">
+        <div class="etichetta"><h2>Letture</h2></div>
+        <div class="letture" id="letture"><p class="errore">Caricamento…</p></div>
+      </article>
+
+      <article class="scheda s2 notizie-s">
+        <div class="etichetta"><h2>Notizie dai mercati</h2></div>
+        <div class="tv" id="notizie" style="min-height:440px"></div>
+      </article>
+
+      <article class="scheda s6 camper">
+        <div class="etichetta"><h2>Dove non piove · 200 km da Genova</h2><a href="meteo-camper.html" target="_blank" rel="noopener">Apri grande</a></div>
+        <iframe src="meteo-camper.html?plancia" title="Meteo camper" loading="lazy"></iframe>
+      </article>
+
+      <article class="scheda s6 link">
+        <div class="etichetta"><h2>Collegamenti</h2></div>
+        <div class="gruppo">
+          <h3>Lavoro</h3>
+          <a href="https://mail.google.com/" target="_blank" rel="noopener">Gmail</a>
+          <a href="https://drive.google.com/" target="_blank" rel="noopener">Drive</a>
+          <a href="https://www.borsaitaliana.it/" target="_blank" rel="noopener">Borsa Italiana</a>
+        </div>
+        <div class="gruppo">
+          <h3>Stampa</h3>
+          <a href="https://www.ilsole24ore.com/" target="_blank" rel="noopener">Il Sole 24 Ore</a>
+          <a href="https://www.milanofinanza.it/" target="_blank" rel="noopener">Milano Finanza</a>
+          <a href="https://www.insidehook.com/" target="_blank" rel="noopener">InsideHook</a>
+        </div>
+        <div class="gruppo">
+          <h3>Stile</h3>
+          <a href="https://www.huckberry.com/journal" target="_blank" rel="noopener">Huckberry Journal</a>
+          <a href="https://www.gearpatrol.com/" target="_blank" rel="noopener">Gear Patrol</a>
+          <a href="https://uncrate.com/" target="_blank" rel="noopener">Uncrate</a>
+          <a href="https://www.blessthisstuff.com/" target="_blank" rel="noopener">Bless This Stuff</a>
+        </div>
+        <div class="gruppo">
+          <h3>Tempo libero</h3>
+          <a href="https://park4night.com/" target="_blank" rel="noopener">park4night</a>
+          <a href="https://www.sampdoria.it/" target="_blank" rel="noopener">U.C. Sampdoria</a>
+        </div>
+      </article>
+    </section>
+
+    <footer class="piede">Meteo Open‑Meteo · Mercati TradingView · Agenda Google Calendar via Apps Script · Partite ESPN · Meteo camper Open‑Meteo · Giornata Wikipedia · Posta e Letture via Apps Script</footer>
+  </main>
+
+  <!-- Pannello Oggi -->
+  <aside class="oggi" aria-label="Oggi">
+    <div class="oggi-testa">
+      <div><h1>OGGI</h1><span class="giorno" id="oggiData">13 ottobre</span></div>
+      <span class="pillola" id="pillola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="oraPillola">--:--</span></span>
+    </div>
+
+    <div class="etichetta samp-tit"><h2 class="sezione">Sampdoria</h2><a class="sezione" href="https://www.sampdoria.it/" target="_blank" rel="noopener" style="font-size:.66rem;margin-top:10px">sampdoria.it</a></div>
+    <article class="scheda samp">
+      <div class="righe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="partite" id="partite"><p class="errore">Caricamento…</p></div>
+    </article>
+
+    <div class="etichetta sezione-riga"><h2 class="sezione">Meteo</h2><button class="sezione" id="aggiornaMeteo" type="button" style="font-size:.66rem;margin-top:10px">Aggiorna</button></div>
+    <article class="scheda" id="meteo">
+      <div class="meteo-ora">
+        <div class="icona" id="icoOra"></div>
+        <div>
+          <div class="temp" id="tempOra">--</div>
+          <div class="cond" id="condOra">Caricamento…</div>
+          <div class="dove"><span id="citta">Genova</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3 3 10.5l7.5 3L13.5 21Z"/></svg></div>
+        </div>
+      </div>
+      <div class="dettagli" id="dettagli"></div>
+      <div class="giorni" id="giorni"></div>
+      <form class="luogo" id="formLuogo">
+        <input id="nuovaCitta" placeholder="Cambia località" aria-label="Cambia località">
+        <button type="submit">Vai</button>
+        <button type="button" id="gps" title="Usa la posizione attuale" aria-label="Usa la posizione attuale"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3 3 10.5l7.5 3L13.5 21Z"/></svg></button>
+      </form>
+    </article>
+
+
+    <h2 class="sezione">In questa giornata</h2>
+    <article class="scheda storia" id="storia"><p class="errore">Caricamento…</p></article>
+  </aside>
+</div>
+
+<script>
+(function(){
+const scuro = false; // la Plancia ha un solo aspetto, chiaro su grigio
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- Ricerca ---------- */
+$("q").addEventListener("input", () => { $("pulisci").hidden = !$("q").value; });
+$("pulisci").onclick = () => { $("q").value = ""; $("pulisci").hidden = true; $("q").focus(); };
+$("ricerca").addEventListener("submit", ev => { if(!$("q").value.trim()) ev.preventDefault(); });
+
+/* ---------- Orologio, saluto, data ---------- */
+let ultimoGiorno = "";
+function tick(){
+  const d = new Date();
+  const hhmm = d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+  $("ora").textContent = hhmm; $("oraPillola").textContent = hhmm;
+  $("oggiData").textContent = d.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"});
+  const h = d.getHours();
+  const s = h<5 ? "Buonanotte" : h<13 ? "Buongiorno" : h<18 ? "Buon pomeriggio" : "Buonasera";
+  $("saluto").innerHTML = s + ", <b>" + esc(CONFIG.nome) + "</b>";
+  if(d.toDateString() !== ultimoGiorno){ ultimoGiorno = d.toDateString(); vista = { a: d.getFullYear(), m: d.getMonth() }; disegnaCal(); caricaStoria(); }
+}
+$("vaiCerca").onclick = ev => { ev.preventDefault(); $("q").focus(); };
+
+/* ---------- Calendario della colonna nera ---------- */
+const MESI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+const MESI_LUNGHI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+let vista = { a: new Date().getFullYear(), m: new Date().getMonth() };
+let giorniSamp = new Set();   // "AAAA-MM-GG" delle partite
+const chiave = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+function settimanaISO(d){
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const g = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - g);
+  const inizio = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - inizio) / 864e5 + 1) / 7);
+}
+function disegnaCal(){
+  $("anno").textContent = vista.a;
+  $("mesi").innerHTML = MESI.map((n,i) => '<button type="button" data-m="'+i+'" aria-current="'+(i===vista.m)+'">'+n.toUpperCase()+'</button>').join("");
+  $("nomeMese").textContent = MESI_LUNGHI[vista.m];
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const primo = new Date(vista.a, vista.m, 1);
+  const inizio = new Date(primo); inizio.setDate(1 - ((primo.getDay()+6)%7));
+  let html = '<span class="h"></span>' + ["L","M","M","G","V","S","D"].map(x => '<span class="h">'+x+'</span>').join("");
+  const d = new Date(inizio);
+  for(let w=0; w<6; w++){
+    if(w>0 && d.getMonth() !== vista.m && d > primo) break;
+    html += '<span class="sett">'+settimanaISO(d)+'</span>';
+    for(let k=0;k<7;k++){
+      const cls = [];
+      if(d.getMonth() !== vista.m) cls.push("fuori");
+      else if(d < oggi) cls.push("passato");
+      if(k>=5) cls.push("fine");
+      if(giorniSamp.has(chiave(d))) cls.push("samp");
+      if(d.getTime() === oggi.getTime()) cls.push("oggi-g");
+      html += '<a class="'+cls.join(" ")+'" href="https://calendar.google.com/calendar/r/day/'+d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+'" target="_blank" rel="noopener" title="'+d.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"})+'">'+d.getDate()+'</a>';
+      d.setDate(d.getDate()+1);
+    }
+  }
+  $("cal").innerHTML = html;
+}
+$("mesi").addEventListener("click", ev => { const b = ev.target.closest("button"); if(!b) return; vista.m = +b.dataset.m; disegnaCal(); });
+$("annoSu").onclick = () => { vista.a++; disegnaCal(); };
+$("annoGiu").onclick = () => { vista.a--; disegnaCal(); };
+
+/* ---------- In questa giornata (Wikipedia) ---------- */
+async function caricaStoria(){
+  const d = new Date(), mm = String(d.getMonth()+1).padStart(2,"0"), gg = String(d.getDate()).padStart(2,"0");
+  for(const lingua of ["it","en"]){
+    try{
+      const r = await fetch("https://api.wikimedia.org/feed/v1/wikipedia/"+lingua+"/onthisday/selected/"+mm+"/"+gg);
+      if(!r.ok) continue;
+      const j = await r.json();
+      const ev = (j.selected || []).filter(e => e.year && e.text);
+      if(!ev.length) continue;
+      const e = ev[Math.floor(Math.random()*Math.min(ev.length, 8))];
+      const url = e.pages?.[0]?.content_urls?.desktop?.page;
+      $("storia").innerHTML = '<b>'+e.year+'</b><p>'+(url ? '<a href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(e.text)+'</a>' : esc(e.text))+'</p>';
+      return;
+    }catch(e){}
+  }
+  $("storia").innerHTML = '<p class="errore">Nessuna ricorrenza disponibile oggi.</p>';
+}
+
+/* ---------- Meteo (Open-Meteo, nessuna chiave) ---------- */
+const PICCOLE = {
+  pioggia:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3s-6 6.6-6 11a6 6 0 0 0 12 0c0-4.4-6-11-6-11Z"/></svg>',
+  umido:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8c3-2 6 2 9 0s6-2 9 0M3 13c3-2 6 2 9 0s6-2 9 0M3 18c3-2 6 2 9 0s6-2 9 0"/></svg>',
+  alba:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 18a7 7 0 0 1 14 0M3 18h18M12 3v6M9 6l3-3 3 3"/></svg>',
+  uv:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>',
+  vento:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h7"/></svg>',
+  tramonto:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 17a8 8 0 0 1 16 0Z"/><rect x="2" y="18.5" width="20" height="2" rx="1"/></svg>'
+};
+function livelloUV(u){ return u < 3 ? "Basso" : u < 6 ? "Moderato" : u < 8 ? "Alto" : u < 11 ? "Molto alto" : "Estremo"; }
+const ICONE = {
+  sole:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
+  luna:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg>',
+  parz:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3.5v1.5M3.5 8H5M4.8 4.8l1 1M11.2 4.8l-1 1"/><path d="M5.6 10.6A3.5 3.5 0 1 1 11.4 7"/><path d="M8 19.5h9.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 8.2 12 3.75 3.75 0 0 0 8 19.5Z"/></svg>',
+  nuvola:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 18.5h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.4 10 4.25 4.25 0 0 0 7 18.5Z"/></svg>',
+  nebbia:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9h16M3 13h18M5 17h14"/></svg>',
+  pioggia:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 14.5h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.4 6 4.25 4.25 0 0 0 7 14.5Z"/><path d="M8.5 17.5l-1 2.5M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5"/></svg>',
+  neve:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 14.5h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.4 6 4.25 4.25 0 0 0 7 14.5Z"/><circle cx="8.5" cy="18.5" r=".6" fill="currentColor"/><circle cx="12.5" cy="20" r=".6" fill="currentColor"/><circle cx="16.5" cy="18.5" r=".6" fill="currentColor"/></svg>',
+  temporale:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14.5h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.4 6 4.25 4.25 0 0 0 7 14.5Z"/><path d="M12.5 15.5 10.5 19h3l-2 3"/></svg>'
+};
+function wmo(c){
+  if(c===0) return ["sole","Sereno"];
+  if(c===1) return ["sole","Prevalentemente sereno"];
+  if(c===2) return ["parz","Parzialmente nuvoloso"];
+  if(c===3) return ["nuvola","Coperto"];
+  if(c===45||c===48) return ["nebbia","Nebbia"];
+  if(c>=51&&c<=57) return ["pioggia","Pioviggine"];
+  if(c>=61&&c<=67) return ["pioggia", c===61?"Pioggia debole":c===65?"Pioggia forte":"Pioggia"];
+  if(c>=71&&c<=77) return ["neve","Neve"];
+  if(c>=80&&c<=82) return ["pioggia","Rovesci"];
+  if(c===85||c===86) return ["neve","Rovesci di neve"];
+  if(c>=95) return ["temporale","Temporale"];
+  return ["nuvola","—"];
+}
+const ico = (c, notte) => { const k = wmo(c)[0]; return ICONE[notte && k==="sole" ? "luna" : k]; };
+function venti(deg){ return ["N","NE","E","SE","S","SO","O","NO"][Math.round(deg/45)%8]; }
+
+let luogo = store.get("plancia.luogo") || CONFIG.meteo;
+
+async function caricaMeteo(){
+  $("citta").textContent = luogo.citta;
+  const url = "https://api.open-meteo.com/v1/forecast?latitude="+luogo.lat+"&longitude="+luogo.lon+
+    "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day"+
+    "&hourly=relative_humidity_2m"+
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max"+
+    "&timezone=auto&forecast_days=6";
+  try{
+    const r = await fetch(url); if(!r.ok) throw 0;
+    const m = await r.json();
+    const c = m.current, d = m.daily;
+    $("icoOra").innerHTML = ico(c.weather_code, !c.is_day).replace('fill="none"','fill="none"');
+    $("tempOra").textContent = Math.round(d.temperature_2m_min[0]) + " – " + Math.round(d.temperature_2m_max[0]) + "°C · ora " + Math.round(c.temperature_2m) + "°";
+    $("condOra").textContent = wmo(c.weather_code)[1];
+    const oggiH = m.hourly.relative_humidity_2m.slice(0, 24).filter(v => v != null);
+    const umMin = Math.min(...oggiH), umMax = Math.max(...oggiH);
+    const uv = Math.round(d.uv_index_max[0] ?? 0);
+    const cella = (k, testo) => '<div>' + PICCOLE[k] + '<span>' + testo + '</span></div>';
+    $("dettagli").innerHTML =
+      cella("pioggia", (d.precipitation_probability_max[0] ?? 0) + "%") +
+      cella("uv", uv + " · " + livelloUV(uv)) +
+      cella("umido", umMin + " – " + umMax + "%") +
+      cella("vento", Math.round(c.wind_speed_10m) + " km/h " + venti(c.wind_direction_10m)) +
+      cella("alba", d.sunrise[0].slice(11,16)) +
+      cella("tramonto", d.sunset[0].slice(11,16));
+    $("giorni").innerHTML = d.time.slice(1, 6).map((t,k) => {
+      const i = k + 1;
+      const nome = new Date(t+"T12:00").toLocaleDateString("it-IT",{weekday:"short"}).replace(".","");
+      return '<div><span class="n">'+nome+'</span>'+ico(d.weather_code[i])+'<span>'+Math.round(d.temperature_2m_max[i])+'°</span><span class="mn">'+Math.round(d.temperature_2m_min[i])+'°</span></div>';
+    }).join("");
+  }catch(e){
+    $("condOra").innerHTML = '<span class="errore">Meteo non raggiungibile. Riprovo tra poco.</span>';
+  }
+}
+caricaMeteo();
+setInterval(caricaMeteo, 15*60*1000);
+$("aggiornaMeteo").onclick = caricaMeteo;
+
+$("formLuogo").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const q = $("nuovaCitta").value.trim(); if(!q) return;
+  try{
+    const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&name="+encodeURIComponent(q));
+    const g = (await r.json()).results?.[0];
+    if(!g){ $("nuovaCitta").value=""; $("nuovaCitta").placeholder="Località non trovata, riprova"; return; }
+    luogo = { citta: g.name, lat: g.latitude, lon: g.longitude };
+    store.set("plancia.luogo", luogo); $("nuovaCitta").value=""; caricaMeteo();
+  }catch(e){}
+});
+$("gps").onclick = () => {
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async p => {
+    const lat = +p.coords.latitude.toFixed(4), lon = +p.coords.longitude.toFixed(4);
+    let nome = "Posizione attuale";
+    try{
+      const r = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=it&latitude="+lat+"&longitude="+lon);
+      const j = await r.json(); nome = j.city || j.locality || nome;
+    }catch(e){}
+    luogo = { citta: nome, lat, lon }; store.set("plancia.luogo", luogo); caricaMeteo();
+  }, () => {}, { timeout: 10000 });
+};
+
+/* ---------- TradingView ---------- */
+function tv(contenitore, file, cfg){
+  const box = document.createElement("div"); box.className = "tradingview-widget-container";
+  const w = document.createElement("div"); w.className = "tradingview-widget-container__widget";
+  const s = document.createElement("script"); s.async = true;
+  s.src = "https://s3.tradingview.com/external-embedding/embed-widget-" + file + ".js";
+  s.textContent = JSON.stringify(cfg);
+  box.append(w, s); $(contenitore).append(box);
+}
+const tema = scuro ? "dark" : "light";
+tv("nastro", "ticker-tape", { symbols: CONFIG.nastro, showSymbolLogo: false, isTransparent: true, displayMode: "adaptive", colorTheme: tema, locale: "it" });
+tv("mercati", "market-overview", {
+  colorTheme: tema, dateRange: "1D", showChart: false, locale: "it", width: "100%", height: "100%",
+  isTransparent: true, showSymbolLogo: true, showFloatingTooltip: true,
+  plotLineColorGrowing: "rgba(47,93,168,1)", plotLineColorFalling: "rgba(47,93,168,1)",
+  gridLineColor: "rgba(0,0,0,0.06)", scaleFontColor: "rgba(85,85,85,1)",
+  belowLineFillColorGrowing: "rgba(47,93,168,0.16)", belowLineFillColorFalling: "rgba(47,93,168,0.16)",
+  belowLineFillColorGrowingBottom: "rgba(47,93,168,0)", belowLineFillColorFallingBottom: "rgba(47,93,168,0)",
+  symbolActiveColor: "rgba(47,93,168,0.12)",
+  tabs: CONFIG.mercati.map(t => ({ title: t.title, symbols: t.symbols, originalTitle: t.title }))
+});
+tv("notizie", "timeline", { feedMode: "all_symbols", isTransparent: true, displayMode: "compact", width: "100%", height: "100%", colorTheme: tema, locale: "it" });
+
+/* ---------- Sampdoria: prossime 3 partite (ESPN) ---------- */
+const NOMI_COMP = { "ita.1": "Serie A", "ita.2": "Serie B", "ita.coppa_italia": "Coppa Italia" };
+function traQuanto(d){
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const g = new Date(d); g.setHours(0,0,0,0);
+  const n = Math.round((g - oggi) / 864e5);
+  return n === 0 ? "oggi" : n === 1 ? "domani" : "tra " + n + " giorni";
+}
+async function caricaSamp(){
+  let tutte = [];
+  await Promise.all(CONFIG.samp.competizioni.map(async comp => {
+    try{
+      const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/" + comp + "/teams/" + CONFIG.samp.id + "/schedule?fixture=true");
+      if(!r.ok) return;
+      const j = await r.json();
+      (j.events || []).forEach(ev => tutte.push({ ev, comp }));
+    }catch(e){}
+  }));
+  if(!tutte.length && CONFIG.script){
+    // Se il browser blocca la richiesta diretta, la fa lo script Apps Script
+    try{
+      const r = await fetch(CONFIG.script + "&what=samp", { redirect: "follow" });
+      const j = await r.json();
+      tutte = (j.eventi || []).filter(x => CONFIG.samp.competizioni.includes(x.comp) || x.comp === "ita.1");
+    }catch(e){}
+  }
+  giorniSamp = new Set(tutte.map(x => chiave(new Date(x.ev.date))));
+  disegnaCal();
+  const adesso = Date.now() - 2*3600e3;
+  const prossime = tutte
+    .filter(x => new Date(x.ev.date).getTime() > adesso && (x.ev.competitions?.[0]?.status?.type?.state ?? "pre") !== "post")
+    .sort((a,b) => new Date(a.ev.date) - new Date(b.ev.date))
+    .slice(0, 3);
+  if(!prossime.length){
+    $("partite").innerHTML = '<p class="errore">Calendario non disponibile al momento' + (CONFIG.script ? '' : ': collega lo script per avere un percorso di riserva') + '.</p>';
+    return;
+  }
+  $("partite").innerHTML = prossime.map(({ ev, comp }) => {
+    const c = ev.competitions?.[0] || {};
+    const squadre = c.competitors || [];
+    const samp = squadre.find(t => String(t.id ?? t.team?.id) === String(CONFIG.samp.id));
+    const avv = squadre.find(t => t !== samp);
+    const inCasa = samp ? samp.homeAway === "home" : /at sampdoria$/i.test(ev.name || "");
+    const nomeAvv = avv?.team?.displayName || avv?.team?.shortDisplayName || (ev.name || "").replace(/sampdoria|\bat\b/gi, "").trim();
+    const d = new Date(ev.date);
+    const orarioOk = c.timeValid !== false;
+    const quando = d.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Rome" }).replace(/\./g, "") +
+                   (orarioOk ? " · " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" }) : " · orario da definire");
+    const luogo = c.venue?.fullName ? " · " + c.venue.fullName : "";
+    return '<div class="partita riga"><span class="contro">' + (inCasa ? "vs " : "@ ") + esc(nomeAvv) + ' <span class="pill' + (inCasa ? " casa" : "") + '">' + (inCasa ? "Ferraris" : "Trasferta") + '</span></span>' +
+           '<span class="sub">' + esc(quando) + ' · ' + traQuanto(d) + '</span>' +
+           '<span class="comp">' + esc((NOMI_COMP[comp] || comp) + (inCasa ? "" : luogo)) + '</span></div>';
+  }).join("");
+}
+caricaSamp();
+setInterval(caricaSamp, 6*3600e3);
+
+/* ---------- Gmail: non lette (via Apps Script) ---------- */
+function quandoMail(iso){
+  const d = new Date(iso), oggi = new Date();
+  if(d.toDateString() === oggi.toDateString()) return d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const ieri = new Date(oggi); ieri.setDate(oggi.getDate() - 1);
+  if(d.toDateString() === ieri.toDateString()) return "ieri";
+  return d.toLocaleDateString("it-IT", { day: "numeric", month: "short" }).replace(".", "");
+}
+function nomeMittente(f){ const m = String(f).match(/^\s*"?([^"<]+?)"?\s*</); return m ? m[1] : String(f).replace(/[<>]/g, ""); }
+async function caricaPosta(){
+  if(!CONFIG.script){
+    $("posta").innerHTML = '<p class="vuoto">Manca la chiave dello script. <a href="#" id="metti">Inseriscila</a>.</p>'; $("metti").onclick = ev => { ev.preventDefault(); chiediChiave(); }; return;
+    $("posta").innerHTML = '<p class="vuoto">Da collegare una volta sola:</p><ol>' +
+      '<li>Apri <a href="https://script.google.com/home/start" target="_blank" rel="noopener">script.google.com</a>, nuovo progetto, incolla <code>plancia-script.gs</code>.</li>' +
+      '<li>Cambia la chiave in cima allo script.</li>' +
+      '<li>Deploy › New deployment › Web app: Execute as <b>Me</b>, accesso <b>Anyone</b>.</li>' +
+      '<li>Incolla l\'URL in <code>CONFIG.script</code> aggiungendo <code>?k=</code> e la chiave.</li></ol>';
+    return;
+  }
+  try{
+    const r = await fetch(CONFIG.script + "&what=posta", { redirect: "follow" });
+    const j = await r.json();
+    if(j.error) throw j.error;
+    const cnt = $("contaPosta");
+    cnt.textContent = j.count; cnt.hidden = !j.count;
+    if(!j.items?.length){ $("posta").innerHTML = '<p class="vuoto">Nessuna mail da leggere. Inbox pulita.</p>'; return; }
+    $("posta").innerHTML = j.items.map(m =>
+      '<a class="riga" href="https://mail.google.com/mail/u/0/#inbox/' + encodeURIComponent(m.id) + '" target="_blank" rel="noopener">' +
+      '<span class="da">' + esc(nomeMittente(m.from)) + '</span><span class="quando">' + esc(quandoMail(m.date)) + '</span>' +
+      '<span class="ogg">' + esc(m.subject || "(senza oggetto)") + '</span></a>').join("");
+  }catch(e){
+    if(e === "chiave") $("posta").onclick = chiediChiave;
+    $("posta").innerHTML = '<p class="errore">' + (e === "chiave" ? "Chiave non valida: tocca qui per reinserirla." : "Posta non raggiungibile. Riprovo tra poco.") + '</p>';
+  }
+}
+caricaPosta();
+setInterval(caricaPosta, 3*60e3);
+document.addEventListener("visibilitychange", () => { if(!document.hidden){ caricaPosta(); } });
+
+/* ---------- Letture (feed dei siti, via Apps Script) ---------- */
+function fa(iso){
+  if(!iso) return "";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if(m < 60) return m <= 1 ? "ora" : m + " min fa";
+  const h = Math.round(m / 60); if(h < 24) return h + " h fa";
+  const g = Math.round(h / 24); return g === 1 ? "ieri" : g + " giorni fa";
+}
+async function caricaLetture(){
+  if(!CONFIG.script){
+    $("letture").innerHTML = '<p class="errore">Si attiva con lo stesso script della posta: incolla l\'URL in <code>CONFIG.script</code>.</p>';
+    return;
+  }
+  try{
+    const r = await fetch(CONFIG.script + "&what=letture", { redirect: "follow" });
+    const j = await r.json();
+    if(j.error) throw j.error;
+    if(!j.items?.length){ $("letture").innerHTML = '<p class="errore">Nessun articolo trovato. Esegui provaLetture() nello script per vedere quale sito non risponde.</p>'; return; }
+    $("letture").innerHTML = j.items.map(a =>
+      '<a href="' + esc(a.link) + '" target="_blank" rel="noopener">' +
+      (a.immagine ? '<img src="' + esc(a.immagine) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'ph\'}))">' : '<span class="ph"></span>') +
+      '<span class="t"><span class="f">' + esc(a.fonte) + (a.data ? ' · ' + fa(a.data) : '') + '</span><b>' + esc(a.titolo) + '</b></span></a>'
+    ).join("");
+  }catch(e){
+    if(e === "chiave") $("letture").onclick = chiediChiave;
+    $("letture").innerHTML = '<p class="errore">' + (e === "chiave" ? "Chiave non valida: tocca qui per reinserirla." : "Letture non raggiungibili. Riprovo tra poco.") + '</p>';
+  }
+}
+caricaLetture();
+setInterval(caricaLetture, 30*60e3);
+
+/* ---------- Agenda: eventi dallo script; se lo script non ha ancora l'agenda, Google Calendar incorporato ---------- */
+function agendaIframe(){
+  const f = $("calendario"); $("agenda").hidden = true; f.hidden = false;
+  if(f.src) return;
+  const p = new URLSearchParams({ ctz: "Europe/Rome", mode: "AGENDA", wkst: "2", showTitle: "0", showNav: "1", showPrint: "0", showTabs: "1", showCalendars: "0", showTz: "0", showDate: "1", bgcolor: "#EEEEEE" });
+  CONFIG.calendari.forEach(c => p.append("src", c));
+  f.src = "https://calendar.google.com/calendar/embed?" + p.toString();
+}
+function nomeGiorno(d){
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const g = new Date(d); g.setHours(0,0,0,0);
+  const n = Math.round((g - oggi) / 864e5);
+  const base = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  return n === 0 ? "Oggi · " + base : n === 1 ? "Domani · " + base : base;
+}
+async function caricaAgenda(){
+  if(!CONFIG.script){ agendaIframe(); return; }
+  try{
+    const r = await fetch(CONFIG.script + "&what=agenda", { redirect: "follow" });
+    const j = await r.json();
+    if(j.error || !Array.isArray(j.items)) throw j.error || "vecchio";
+    $("agenda").hidden = false; $("calendario").hidden = true;
+    if(!j.items.length){ $("agenda").innerHTML = '<p class="vuoto errore">Niente in programma nei prossimi giorni.</p>'; return; }
+    let ultimo = "", html = "";
+    const oggiK = chiave(new Date());
+    j.items.forEach(ev => {
+      const ini = new Date(ev.inizio), fin = new Date(ev.fine);
+      const k = chiave(ini);
+      if(k !== ultimo){ ultimo = k; html += '<div class="giornata' + (k === oggiK ? ' oggi-a' : '') + '">' + esc(nomeGiorno(ini)) + '</div>'; }
+      const ore = ev.tuttoIlGiorno ? "tutto il giorno" : ini.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+      html += '<a class="riga" href="' + esc(ev.link || "https://calendar.google.com/") + '" target="_blank" rel="noopener">' +
+              '<span class="ore">' + esc(ore) + '</span><span class="tit">' + esc(ev.titolo || "(senza titolo)") + '</span>' +
+              (ev.luogo ? '<span class="dove-ev">' + esc(ev.luogo) + '</span>' : '') + '</a>';
+    });
+    $("agenda").innerHTML = html;
+  }catch(e){
+    if(e === "chiave"){ $("agenda").innerHTML = '<p class="errore">Chiave non valida: tocca qui per reinserirla.</p>'; $("agenda").onclick = chiediChiave; return; }
+    agendaIframe();
+  }
+}
+caricaAgenda();
+setInterval(caricaAgenda, 10*60e3);
+
+/* ---------- Chiave dello script: chiesta una volta per dispositivo ---------- */
+function chiediChiave(){
+  if(document.querySelector(".chiave-box")) return;
+  const box = document.createElement("div"); box.className = "chiave-box";
+  box.innerHTML = '<form><h2>Chiave della Plancia</h2><p>Serve per posta, agenda e letture. La inserisci una volta e resta salvata solo su questo dispositivo.</p>' +
+    '<input type="password" autocomplete="current-password" name="k" placeholder="La tua chiave" required>' +
+    '<div class="az"><button type="button" data-no>Più tardi</button><button type="submit">Salva</button></div></form>';
+  document.body.append(box);
+  box.querySelector("[data-no]").onclick = () => box.remove();
+  box.querySelector("form").onsubmit = ev => { ev.preventDefault(); const k = box.querySelector("input").value.trim(); if(!k) return; try{ localStorage.setItem("plancia.chiave", k); }catch(e){} location.reload(); };
+  setTimeout(() => box.querySelector("input").focus(), 50);
+}
+if(!CONFIG.script) chiediChiave();
+
+/* ---------- Come app sul telefono ---------- */
+const comeApp = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+if(comeApp) $("ricerca").target = "_blank";              // la ricerca si apre in Safari, la Plancia resta lì
+if(matchMedia("(pointer: coarse)").matches) $("q").removeAttribute("autofocus");
+document.addEventListener("visibilitychange", () => { if(!document.hidden){ tick(); caricaAgenda(); caricaMeteo(); caricaSamp(); } });
+
+tick(); setInterval(tick, 15000);
+})();
+
+// Scheda "Dove non piove": prende l'altezza che le serve
+addEventListener("message", e => {
+  const a = e.data && e.data.meteoCamper;
+  const f = document.querySelector(".camper iframe");
+  if (a && f && e.source === f.contentWindow) f.style.height = Math.ceil(a) + "px";
+});
+</script>
+</body>
+</html>

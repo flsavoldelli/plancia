@@ -274,6 +274,11 @@ a.riga:hover{background:rgba(0,0,0,.05)}
 .partita .pill.casa{background:#111;color:#fff}
 .partita .comp{font-size:.8rem;color:var(--fumo)}
 
+/* LIMET: il widget è largo 400 px fissi, lo scalo alla larghezza della scheda */
+.limet{padding:12px;overflow:hidden}
+.limet-box{position:relative;width:100%;height:200px;overflow:hidden}
+.limet-box iframe{position:absolute;top:0;left:0;transform-origin:0 0;display:block}
+
 /* In questa giornata */
 .storia{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
 .storia b{font-size:1.6rem;font-weight:500;font-variant-numeric:tabular-nums}
@@ -309,6 +314,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   .oggi > .samp{order:3;margin-bottom:18px}
   .oggi > .sezione-riga{order:4;margin-bottom:8px}
   .oggi > #meteo{order:5;margin-bottom:20px}
+  .oggi > .limet-tit{order:5;margin-bottom:8px}
+  .oggi > .limet{order:5;margin-bottom:20px}
   .centro{order:6;background:var(--grigio);padding:16px 16px 24px;gap:16px}
   .oggi > h2.sezione{order:7;margin-top:20px;margin-bottom:8px}
   .oggi > .storia{order:8;margin-bottom:calc(env(safe-area-inset-bottom) + 24px)}
@@ -460,6 +467,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       </form>
     </article>
 
+    <div class="etichetta limet-tit"><h2 class="sezione">LIMET · Liguria</h2><a class="sezione" href="https://www.centrometeoligure.com/meteo-liguria/" target="_blank" rel="noopener" style="font-size:.66rem;margin-top:10px">Bollettino</a></div>
+    <article class="scheda limet">
+      <div class="limet-box" id="limetBox">
+        <!-- LIMET - WIDGET PREVISIONI www.centrometeoligure.com - LIMET -->
+        <iframe src="https://www.centrometeoligure.com/widget/?comune=916&colore_sfondo=eeeeee&colore_testo=2e4452&sfondo_comune=2f3a48&testo_comune=ffffff" width="400" height="200" frameBorder="0" scrolling="no" loading="lazy" title="Previsioni LIMET" style="width:400px;height:200px;border:0;overflow:hidden;">Widget LIMET non supportato - www.centrometeoligure.com</iframe>
+        <!-- LIMET - Vietata la rimozione dei commenti www.dpsonline.it - LIMET -->
+      </div>
+    </article>
 
     <h2 class="sezione">In questa giornata</h2>
     <article class="scheda storia" id="storia"><p class="errore">Caricamento…</p></article>
@@ -870,6 +885,15 @@ if(matchMedia("(pointer: coarse)").matches) $("q").removeAttribute("autofocus");
 document.addEventListener("visibilitychange", () => { if(!document.hidden){ tick(); caricaAgenda(); caricaMeteo(); caricaSamp(); } });
 
 tick(); setInterval(tick, 15000);
+})();
+
+// LIMET: adatta il widget (400×200) alla larghezza della scheda
+(function(){
+  const box = document.getElementById("limetBox"); if(!box) return;
+  const f = box.querySelector("iframe");
+  const adatta = () => { const s = Math.min(box.clientWidth / 400, 1.4); f.style.transform = "scale(" + s + ")"; box.style.height = Math.round(200 * s) + "px"; };
+  adatta(); addEventListener("resize", adatta);
+  if(window.ResizeObserver) new ResizeObserver(adatta).observe(box);
 })();
 
 // Scheda "Dove non piove": prende l'altezza che le serve
